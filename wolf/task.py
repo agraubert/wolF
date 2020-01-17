@@ -145,7 +145,7 @@ class Task:
 			dep.lock.acquire()
 			dep.lock.release()
 
-		print("Job {} dependencies satisfied".format(self.conf["name"]))
+		print("Task {} dependencies satisfied".format(self.conf["name"]))
 
 		#
 		# we need to call input closures, and convert the series that gets returned
