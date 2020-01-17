@@ -1,8 +1,7 @@
 import canine
 
-import pandas as pd
-
 import copy
+import pandas as pd
 import random
 import re
 import threading
