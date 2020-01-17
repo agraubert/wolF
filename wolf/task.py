@@ -6,6 +6,8 @@ import copy
 import random
 import re
 import threading
+import traceback
+import typing
 
 class Task:
 	pass
@@ -49,7 +51,10 @@ class Task:
 			if conf is not None:
 				self.conf = copy.deepcopy(conf)
 			else:
-				self.conf = k9.get_default_config() # TODO: this should be inferred from the environment
+				self.conf = {
+				  "localization" : { "strategy" : "NFS" },
+				  "script" : []
+				}
 
 			self.conf["name"] = name
 
