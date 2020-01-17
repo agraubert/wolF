@@ -135,12 +135,6 @@ class Task:
 
 	def block_and_convert_deps(self):
 		#
-		# check if dependencies are actually a closure
-		for i, dep in enumerate(self.dependencies):
-			if isinstance(dep, MTask):
-				self.dependencies[i] = dep.task
-
-		#
 		# block on dependencies
 		for dep in self.dependencies:
 			dep.lock.acquire()
@@ -155,8 +149,8 @@ class Task:
 			if callable(v):
 				if v.__name__ == "output_getter":
 					self.conf["inputs"][k] = v().tolist()
-				elif v.__name__ == "output_closure":
-					self.conf["inputs"][k] = v()().tolist()
+				else:
+					self.conf["inputs"][k] = v()
 
 	def run(self):
 		if self.thread is not None and self.thread.is_alive():
