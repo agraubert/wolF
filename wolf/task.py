@@ -304,9 +304,8 @@ class Task:
 		sacct_df = sacct_df.loc[sacct_df["JobName"] != "batch"].drop(columns = "JobName")
 		sacct_df = pd.concat([
 		  sacct_df,
-		  txt.parse(sacct_df.index,
-		    r"(\d+)_(\d+)",
-		    ["JID", "ArrayID"]
+		  sacct_df.index.str.extract(r"(\d+)_(\d+)").rename(
+		    columns = dict(enumerate(["JID", "ArrayID"]))
 		  ).set_index(sacct_df.index)
 		], 1)
 		sacct_df.columns = pd.MultiIndex.from_product([["job"], sacct_df.columns])
