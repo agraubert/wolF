@@ -1,6 +1,7 @@
 import canine
 
 import copy
+import os
 import pandas as pd
 import random
 import re
@@ -37,6 +38,7 @@ class Task:
 	  script: typing.Union[str, typing.List[str], typing.Callable, typing.List[typing.Callable]],
 	  overrides: typing.Optional[typing.Dict] = None,
 	  output_dir: typing.Optional[str] = None,
+	  output_dir_stem: str = "/mnt/nfs/workspace/",
 	  conf: typing.Optional[typing.Dict] = None,
 	  backend: typing.Optional[canine.backends.AbstractSlurmBackend] = None,
 	  dependencies:
@@ -82,9 +84,9 @@ class Task:
 
 			#
 			# staging dir
-			if output_dir is None:
-				output_dir = "/mnt/nfs/workspace/" + re.sub("/", "-", self.conf["name"])
-			self.conf["localization"]["staging_dir"] = output_dir
+			self.output_dir_stem = output_dir_stem
+			self.output_dir = re.sub("/", "-", self.conf["name"]) if output_dir is None else output_dir
+			self.set_output_directory(self.output_dir)
 
 			#
 			# dependencies
@@ -130,6 +132,10 @@ class Task:
 			traceback.print_exc()
 
 			self.batch_id = -1
+
+	def set_output_directory(self, outdir):
+		output_dir = os.path.join(self.output_dir_stem, outdir)
+		self.conf["localization"]["staging_dir"] = output_dir
 
 	def get_output(self, fields, func = lambda x : x):
 		def output_getter():

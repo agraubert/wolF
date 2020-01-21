@@ -3,6 +3,7 @@ from . import Task
 import canine
 
 import abc
+import os
 import pandas as pd
 
 class Workflow:
@@ -40,7 +41,7 @@ class Workflow:
 		flow.workflow(**kwargs)
 
 		if run_name is None:
-			run_name = self.run_index
+			run_name = str(self.run_index)
 		self.run_index += 1
 
 		#
@@ -48,8 +49,12 @@ class Workflow:
 		self.flow_list[run_name] = flow._index_tasks()
 
 		#
-		# dispatch tasks
+		# dispatch tasks, with outputs in run-specific directory
 		for t in self.flow_list[run_name].values():
+			# update output directory of this task to be within parent folder
+			# of workflow
+			t.set_output_directory(os.path.join(str(run_name), t.output_dir))
+
 			t.run()
 
 	def _index_tasks(self):
