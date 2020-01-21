@@ -93,6 +93,6 @@ class Workflow:
 
 				w.append(pd.concat(r, keys = workflow.keys(), names = ["task", "shard"]))
 
-			self.results = pd.concat(w, keys = self.flow_list.keys(), names = ["workflow_name"])
+			self.results = pd.concat(w, keys = self.flow_list.keys(), names = ["workflow_run_name"])
 		finally:
 			self.backend.__exit__()
