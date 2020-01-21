@@ -21,8 +21,10 @@ class Task:
 				dep = str(d.batch_id)
 				if dep == "-1":
 					raise ValueError("Upstream dependency {} was unable to even start.".format(d.conf["name"]))
-
-				depstr.append(dep)
+				elif dep == "-2":
+					print("Upstream dependency {} was completely job avoided.".format(d.conf["name"]))
+				else:
+					depstr.append(dep)
 			else:
 				raise TypeError("Dependencies can only be specified as task objects!")
 
@@ -261,6 +263,7 @@ class Task:
 			self.localizer = canine.localization.nfs.NFSLocalizer(self.orch.backend, **self.conf["localization"])
 
 			# localize files
+			self.orch.job_avoid(self.localizer)
 			entrypoint_path = self.orch.localize_inputs_and_script(self.localizer)
 		except:
 			exception("localizing files for")
@@ -274,17 +277,23 @@ class Task:
 			# wait for jobs to finish
 			completed_jobs, cpu_time, uptime, prev_acct = self.orch.wait_for_jobs_to_finish(self.batch_id)
 
+			# job comprised a single task
 			if len(self.orch.job_spec) == 1:
 				print("Task \"{}\" finished with status {}".format(
 				  self.conf["name"], self.status()[("job", "State")].iloc[0]
 				))
-			else:
+			# job comprised multiple tasks
+			elif len(self.orch.job_spec) >= 1:
 				print("Task \"{}\" finished with statuses {}".format(
 				  self.conf["name"],
 				  ", ".join([str(k) + ": " + str(v)
 					for k, v in self.status()[("job", "State")].value_counts().iteritems()
 				  ])
 				))
+			# job was completely job avoided!
+			else:
+				print("Task \"{}\" was job avoided.".format(self.conf["name"]))
+				
 		except:
 			exception("running")
 			raise
@@ -305,20 +314,23 @@ class Task:
 		self.backend.scancel(self.batch_id)
 
 	def status(self):
-		sacct_df = self.backend.sacct(job = self.batch_id, format = "JobId,JobName,State,ExitCode,CPUTimeRaw,NodeList%30")
-		sacct_df = sacct_df.loc[sacct_df["JobName"] != "batch"].drop(columns = "JobName")
-		sacct_df = pd.concat([
-		  sacct_df,
-		  sacct_df.index.str.extract(r"(\d+)_(\d+)").rename(
-		    columns = dict(enumerate(["JID", "ArrayID"]))
-		  ).set_index(sacct_df.index)
-		], 1)
-		sacct_df.columns = pd.MultiIndex.from_product([["job"], sacct_df.columns])
+		if self.batch_id != -2:
+			sacct_df = self.backend.sacct(job = self.batch_id, format = "JobId,JobName,State,ExitCode,CPUTimeRaw,NodeList%30")
+			sacct_df = sacct_df.loc[sacct_df["JobName"] != "batch"].drop(columns = "JobName")
+			sacct_df = pd.concat([
+			  sacct_df,
+			  sacct_df.index.str.extract(r"(\d+)_(\d+)").rename(
+				columns = dict(enumerate(["JID", "ArrayID"]))
+			  ).set_index(sacct_df.index)
+			], 1)
+			sacct_df.columns = pd.MultiIndex.from_product([["job"], sacct_df.columns])
 
-		# merge with inputs
-		input_df = pd.DataFrame.from_dict(self.orch.job_spec, orient = "index")
-		input_df.columns = pd.MultiIndex.from_product([["inputs"], input_df.columns])
+			# merge with inputs
+			input_df = pd.DataFrame.from_dict(self.orch.job_spec, orient = "index")
+			input_df.columns = pd.MultiIndex.from_product([["inputs"], input_df.columns])
 
-		sacct_df = sacct_df.merge(input_df, left_on = [("job", "ArrayID")], right_index = True)
+			sacct_df = sacct_df.merge(input_df, left_on = [("job", "ArrayID")], right_index = True)
 
-		return sacct_df
+			return sacct_df
+		else:
+			print("Job was avoided; no status to report.")
