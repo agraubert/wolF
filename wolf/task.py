@@ -305,7 +305,8 @@ class Task:
 			self.results = self.orch.make_output_DF(self.batch_id, outputs, cpu_time, prev_acct, self.localizer)
 
 			# release lock
-			self.lock.release()
+			if self.lock.locked():
+				self.lock.release()
 
 	def cancel(self):
 		while self.batch_id is None:
