@@ -1,0 +1,3 @@
+[submodule "slurm_gcp_docker"]
+	path = slurm_gcp_docker
+	url = https://github.com/getzlab/slurm_gcp_docker
