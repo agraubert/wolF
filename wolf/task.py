@@ -122,6 +122,9 @@ class Task:
 			# output dataframe of last run submission
 			self.results = pd.DataFrame(columns = self.conf["outputs"])
 
+			# number of jobs avoided
+			self.n_avoided = 0
+
 			# runner thread
 			self.thread = None
 
@@ -263,7 +266,7 @@ class Task:
 			self.localizer = canine.localization.nfs.NFSLocalizer(self.orch.backend, **self.conf["localization"])
 
 			# localize files
-			self.orch.job_avoid(self.localizer)
+			self.n_avoided = self.orch.job_avoid(self.localizer)
 			entrypoint_path = self.orch.localize_inputs_and_script(self.localizer)
 		except:
 			exception("localizing files for")
@@ -277,22 +280,29 @@ class Task:
 			# wait for jobs to finish
 			completed_jobs, cpu_time, uptime, prev_acct = self.orch.wait_for_jobs_to_finish(self.batch_id)
 
-			# job comprised a single task
-			if len(self.orch.job_spec) == 1:
-				print("Task \"{}\" finished with status {}".format(
-				  self.conf["name"], self.status()[("job", "State")].iloc[0]
-				))
-			# job comprised multiple tasks
-			elif len(self.orch.job_spec) >= 1:
-				print("Task \"{}\" finished with statuses {}".format(
-				  self.conf["name"],
-				  ", ".join([str(k) + ": " + str(v)
-					for k, v in self.status()[("job", "State")].value_counts().iteritems()
-				  ])
-				))
-			# job was completely job avoided!
+			# FIXME: currently, job accounting does not work with partially avoided
+			#        jobs. this is because Task.status() assumes Task.orch.job_spec
+			#        is in sync with the array IDs
+
+			if self.n_avoided == 0:
+				# job comprised a single task
+				if len(self.orch.job_spec) == 1:
+					print("Task \"{}\" finished with status {}".format(
+					  self.conf["name"], self.status()[("job", "State")].iloc[0]
+					))
+				# job comprised multiple tasks
+				elif len(self.orch.job_spec) >= 1:
+					print("Task \"{}\" finished with statuses {}".format(
+					  self.conf["name"],
+					  ", ".join([str(k) + ": " + str(v)
+						for k, v in self.status()[("job", "State")].value_counts().iteritems()
+					  ])
+					))
 			else:
-				print("Task \"{}\" was job avoided.".format(self.conf["name"]))
+				print("Task \"{}\" was job avoided ({:d} jobs avoided).".format(
+				  self.conf["name"],
+				  self.n_avoided
+				))
 				
 		except:
 			exception("running")
@@ -315,7 +325,10 @@ class Task:
 		self.backend.scancel(self.batch_id)
 
 	def status(self):
-		if self.batch_id != -2:
+		# FIXME: we need to be able to report status on partially avoided jobs
+		#        of course, it still makes sense to not report anything on
+		#        completely avoided jobs.
+		if self.batch_id != -2 and self.n_avoided == 0:
 			sacct_df = self.backend.sacct(job = self.batch_id, format = "JobId,JobName,State,ExitCode,CPUTimeRaw,NodeList%30")
 			sacct_df = sacct_df.loc[sacct_df["JobName"] != "batch"].drop(columns = "JobName")
 			sacct_df = pd.concat([
