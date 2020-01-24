@@ -5,6 +5,7 @@ import canine
 import abc
 import os
 import pandas as pd
+import random
 
 class Workflow:
 	def __init__(self, backend = None, conf = {}):
@@ -24,6 +25,9 @@ class Workflow:
 		# all workflows dispatched by this workflow definition
 		self.flow_list = {}
 
+		# UID for this run if the user didn't specify a name
+		self.run_uid = '%08x' % random.randrange(0xFFFFFFFF)
+
 		# number of workflows that have been dispatched by this definition
 		self.run_index = 0
 
@@ -41,7 +45,7 @@ class Workflow:
 		flow.workflow(**kwargs)
 
 		if run_name is None:
-			run_name = str(self.run_index)
+			run_name = self.run_uid + "_" + str(self.run_index)
 		self.run_index += 1
 
 		#
