@@ -25,6 +25,8 @@ class Task:
 					print("Upstream dependency {} was completely job avoided.".format(d.conf["name"]))
 				else:
 					depstr.append(dep)
+			elif d is None:
+				pass
 			else:
 				raise TypeError("Dependencies can only be specified as task objects!")
 
@@ -152,8 +154,9 @@ class Task:
 		#
 		# block on dependencies
 		for dep in self.dependencies:
-			dep.lock.acquire()
-			dep.lock.release()
+			if dep is not None:
+				dep.lock.acquire()
+				dep.lock.release()
 
 		print("Task {} dependencies satisfied".format(self.conf["name"]))
 
