@@ -22,7 +22,7 @@ class Task:
 				if dep == "-1":
 					raise ValueError("Upstream dependency {} was unable to even start.".format(d.conf["name"]))
 				elif dep == "-2":
-					print("Upstream dependency {} was completely job avoided.".format(d.conf["name"]))
+					print("Upstream dependency \"{}\" was completely job avoided.".format(d.conf["name"]))
 				else:
 					depstr.append(dep)
 			elif d is None:
@@ -30,8 +30,12 @@ class Task:
 			else:
 				raise TypeError("Dependencies can only be specified as task objects!")
 
-		# TODO: support additional dependency types (e.g. afternotok)
-		return "afterok:" + ":".join(depstr)
+		# did we have non-avoided dependencies?
+		if len(depstr) > 0:
+			# TODO: support additional dependency types (e.g. afternotok)
+			return "after:" + ":".join(depstr)
+		else:
+			return None
 
 	def __init__(
 	  self, *,
@@ -219,10 +223,11 @@ class Task:
 					print("Upstream dependencies in {} were unable to start!".format(self.conf["name"]))
 					raise
 
-				self.extra_slurm_args = {
-				  **self.extra_slurm_args,
-				  **{"dependency" : proc_deps }
-				}
+				if proc_deps is not None:
+					self.extra_slurm_args = {
+					  **self.extra_slurm_args,
+					  **{"dependency" : proc_deps }
+					}
 		except:
 			exception("initializing")
 			raise
@@ -302,6 +307,7 @@ class Task:
 					  ])
 					))
 			else:
+				# TODO: also print the total number of jobs in this task
 				print("Task \"{}\" was job avoided ({:d} jobs avoided).".format(
 				  self.conf["name"],
 				  self.n_avoided
