@@ -86,8 +86,7 @@ class Workflow:
 				#
 				# wait for all tasks within this workflow to finish
 				for task in workflow.values():
-					task.lock.acquire()
-					task.lock.release()
+					task.lock.wait()
 
 				#
 				# aggregate tasks' results

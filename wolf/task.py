@@ -135,9 +135,8 @@ class Task:
 			self.thread = None
 
 			#
-			# create and acquire lock; will be released when task finishes
-			self.lock = threading.Lock()
-			self.lock.acquire()
+			# create Event which will be set when this task finishes
+			self.lock = threading.Event()
 		except:
 			print("Error initializing job {}:".format(name))
 			traceback.print_exc()
@@ -159,10 +158,9 @@ class Task:
 		# block on dependencies
 		for dep in self.dependencies:
 			if dep is not None:
-				dep.lock.acquire()
-				dep.lock.release()
+				dep.lock.wait()
 
-		print("Task {} dependencies satisfied".format(self.conf["name"]))
+		print("Task \"{}\" dependencies satisfied".format(self.conf["name"]))
 
 		#
 		# we need to call input closures, and convert the series that gets returned
@@ -183,7 +181,7 @@ class Task:
 			def func_closure():
 				self.block_and_convert_deps()
 				self.results = self.conf["script"](self.conf["inputs"])
-				self.lock.release()
+				self.lock.set()
 
 			targ = func_closure
 		else:
@@ -198,8 +196,8 @@ class Task:
 			traceback.print_exc()
 
 			self.batch_id = -1
-			if self.lock.locked():
-				self.lock.release()
+			if not self.lock.is_set():
+				self.lock.set()
 
 		try:
 			#
@@ -324,8 +322,8 @@ class Task:
 			self.results = self.orch.make_output_DF(self.batch_id, outputs, cpu_time, prev_acct, self.localizer)
 
 			# release lock
-			if self.lock.locked():
-				self.lock.release()
+			if not self.lock.is_set():
+				self.lock.set()
 
 	def cancel(self):
 		while self.batch_id is None:
