@@ -94,7 +94,10 @@ class Workflow:
 				# aggregate tasks' results
 				r = []
 				for task in workflow.values():
-					r.append(task.results)
+					if not task.results.empty:
+						r.append(task.results)
+					else: # this job was a total failure
+						r.append(pd.DataFrame(index = [float('nan')]))
 
 				w.append(pd.concat(r, keys = workflow.keys(), names = ["task", "shard"]))
 
