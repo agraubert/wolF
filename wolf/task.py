@@ -40,7 +40,7 @@ class Task:
 	def __init__(
 	  self, *,
 	  name: str,
-	  inputs: typing.Optional[typing.Dict] = None,
+	  inputs: typing.Dict = None,
 	  outputs: typing.Optional[typing.Dict] = None,
 	  resources: typing.Dict = { "cpus-per-task" : 1, "mem" : "1G" },
 	  script: typing.Union[str, typing.List[str], typing.Callable, typing.List[typing.Callable]],
@@ -69,6 +69,10 @@ class Task:
 
 			self.conf["inputs"] = inputs
 			self.conf["outputs"] = outputs
+
+			if self.conf["inputs"] is None:
+				print("At least one input must be specified!")
+				raise ValueError
 
 			self.conf["resources"] = resources
 
@@ -142,9 +146,7 @@ class Task:
 			self.lock = threading.Event()
 		except:
 			print("Error initializing job {}:".format(name))
-			traceback.print_exc()
-
-			self.batch_id = -1
+			raise
 
 	def set_output_directory(self, outdir):
 		output_dir = os.path.join(self.output_dir_stem, outdir)

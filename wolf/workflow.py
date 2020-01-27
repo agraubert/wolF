@@ -38,7 +38,11 @@ class Workflow:
 
 		#
 		# instantiate task objects in copy
-		flow.workflow(**kwargs)
+		try:
+			flow.workflow(**kwargs)
+		except:
+			print("Workflow is invalid!")
+			raise
 
 		if run_name is None:
 			run_name = self.__class__.__name__ + "_" + str(self.run_index)
