@@ -149,7 +149,10 @@ class Task:
 
 	def get_output(self, fields, func = lambda x : x):
 		def output_getter():
-			return func(self.results["outputs"].loc[:, fields])
+			try:
+				return func(self.results["outputs"].loc[:, fields])
+			except KeyError:
+				return KeyError(fields)
 
 		return output_getter
 
@@ -168,7 +171,11 @@ class Task:
 		for k, v in self.conf["inputs"].items():
 			if callable(v):
 				if v.__name__ == "output_getter":
-					self.conf["inputs"][k] = v().tolist()
+					if not isinstance(v(), KeyError):
+						self.conf["inputs"][k] = v().tolist()
+					else:
+						# FIXME: get the name of the upstream task here
+						raise KeyError("Could not resolve input \"{}\": output \"{}\" was not returned by upstream task!".format(k, v().args[0]))
 				else:
 					self.conf["inputs"][k] = v()
 
@@ -227,7 +234,7 @@ class Task:
 					  **{"dependency" : proc_deps }
 					}
 		except:
-			exception("initializing")
+			exception("resolving dependencies for")
 			raise
 
 		if self.docker is not None:
