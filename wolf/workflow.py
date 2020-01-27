@@ -96,6 +96,10 @@ class Workflow:
 
 				w.append(pd.concat(r, keys = workflow.keys(), names = ["task", "shard"]))
 
-			self.results = pd.concat(w, keys = self.flow_list.keys(), names = ["workflow_run_name"])
+			# XXX: we might need to put this in a try/catch block -- there are
+			#      many more ways that this can get screwed up besides zero output.
+			self.results = pd.concat(w, keys = self.flow_list.keys(), names = ["workflow_run_name"]) if len(w) > 0 else None
+
+			# TODO: save results
 		finally:
 			self.backend.__exit__()
