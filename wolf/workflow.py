@@ -5,7 +5,7 @@ import canine
 import abc
 import os
 import pandas as pd
-import random
+import uuid
 
 class Workflow:
 	def __init__(self, backend = None, conf = {}):
@@ -26,7 +26,7 @@ class Workflow:
 		self.flow_list = {}
 
 		# UID for this run if the user didn't specify a name
-		self.run_uid = '%08x' % random.randrange(0xFFFFFFFF)
+		self.run_uid = uuid.uuid4().hex[0:8]
 
 		# number of workflows that have been dispatched by this definition
 		self.run_index = 0

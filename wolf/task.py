@@ -3,11 +3,11 @@ import canine
 import copy
 import os
 import pandas as pd
-import random
 import re
 import threading
 import traceback
 import typing
+import uuid
 
 class Task:
 	pass
@@ -245,7 +245,7 @@ class Task:
 						self.docker[k] = v
 
 				# wrap script in Docker invocation
-				delim = '%08x' % random.randrange(0xFFFFFFFF)
+				delim = uuid.uuid4().hex[0:8]
 				self.conf["script"] = [
 				  'docker run -v /mnt/nfs:/mnt/nfs {rm} --network host -i \
 				  --name "{name}" --user $(id -u {user}):$(id -g {user}) \
