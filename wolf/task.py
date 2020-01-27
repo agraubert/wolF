@@ -122,6 +122,9 @@ class Task:
 			#
 			# create placeholders: 
 
+			# workflow ID (added by wolf.Workflow, post-hoc)
+			self.conf["workflow"] = ""
+
 			# batch ID of submitted job
 			self.batch_id = None
 
@@ -257,7 +260,7 @@ class Task:
 				  'docker run -v /mnt/nfs:/mnt/nfs {rm} --network host -i \
 				  --name "{name}" --user $(id -u {user}):$(id -g {user}) \
 				  -e "K9_CWD=`pwd`" --env-file <(env | cut -f 1 -d =) {image} {shell} - <<'.format(
-					name = self.conf["name"] + "_$SLURM_ARRAY_TASK_ID",
+					name = self.conf["workflow"] + "_" + self.conf["name"] + "_$SLURM_ARRAY_TASK_ID",
 					user = self.backend.config["user"] if "user" not in self.docker \
 					  else self.docker["user"],
 					image = self.docker["image"] + ":" + self.docker["tag"],

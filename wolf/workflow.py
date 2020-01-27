@@ -55,6 +55,12 @@ class Workflow:
 			# of workflow
 			t.set_output_directory(os.path.join(str(run_name), t.output_dir))
 
+			# set workflow name (this is just so that Docker container IDs are
+			# unique)
+			# TODO: add a check that multiple workflows with the same name
+			#       can't be dispatched simultaneously
+			t.conf["workflow"] = run_name
+
 			t.run()
 
 	def _index_tasks(self):
