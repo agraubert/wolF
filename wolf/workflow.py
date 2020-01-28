@@ -84,6 +84,7 @@ class Workflow:
 		return self
 
 	def __exit__(self, *args):
+		print("Exiting workflow ...")
 		try:
 			#
 			# loop over all workflows dispatched
@@ -111,4 +112,5 @@ class Workflow:
 
 			# TODO: save results
 		finally:
+			print("Tearing down cluster ...")
 			self.backend.__exit__()
