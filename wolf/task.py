@@ -67,6 +67,10 @@ class Task:
 
 			self.conf["name"] = name
 
+			if re.search(r"/", self.conf["name"]) is not None:
+				print("Task name cannot contain forward slashes (/)")
+				raise ValueError
+
 			self.conf["inputs"] = inputs
 			self.conf["outputs"] = outputs
 
