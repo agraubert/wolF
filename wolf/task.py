@@ -67,8 +67,8 @@ class Task:
 
 			self.conf["name"] = name
 
-			if re.search(r"/", self.conf["name"]) is not None:
-				print("Task name cannot contain forward slashes (/)")
+			if re.match(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]+$", self.conf["name"]) is None:
+				print("Invalid task name: must match regex /^[a-zA-Z0-9][a-zA-Z0-9_.-]+$/")
 				raise ValueError
 
 			self.conf["inputs"] = inputs
