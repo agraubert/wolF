@@ -268,7 +268,8 @@ class Task:
 				  --name "{name}" --user $(id -u {user}):$(id -g {user}) \
 				  --init -e "TINI_KILL_PROCESS_GROUP=1" \
 				  -e "K9_CWD=`pwd`" --env-file <(env | cut -f 1 -d =) {image} {shell} - <<'.format(
-					name = self.conf["workflow"] + "_" + self.conf["name"] + "_$SLURM_ARRAY_TASK_ID",
+					name = (self.conf["workflow"] + "_" if self.conf["workflow"] != "" else "") + \
+				      self.conf["name"] + "_$SLURM_ARRAY_TASK_ID",
 					user = self.backend.config["user"] if "user" not in self.docker \
 					  else self.docker["user"],
 					image = self.docker["image"] + ":" + self.docker["tag"],
