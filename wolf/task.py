@@ -6,6 +6,7 @@ import pandas as pd
 import re
 import threading
 import traceback
+import types
 import typing
 import uuid
 
@@ -265,6 +266,7 @@ class Task:
 				self.conf["script"] = [
 				  'docker run -v /mnt/nfs:/mnt/nfs {rm} --network host -i \
 				  --name "{name}" --user $(id -u {user}):$(id -g {user}) \
+				  --init -e "TINI_KILL_PROCESS_GROUP=1" \
 				  -e "K9_CWD=`pwd`" --env-file <(env | cut -f 1 -d =) {image} {shell} - <<'.format(
 					name = self.conf["workflow"] + "_" + self.conf["name"] + "_$SLURM_ARRAY_TASK_ID",
 					user = self.backend.config["user"] if "user" not in self.docker \
@@ -273,9 +275,19 @@ class Task:
 				    shell = self.docker["shell"],
 				    rm = "--rm" if self.docker["rm"] else ""
 				  ) + \
-				  '"' + delim + '"\n' + "cd $K9_CWD\n" + "\n".join(self.conf["script"]) + \
-				  "\n" + delim
+				  '"' + delim + '" &\n' + "cd $K9_CWD\n" + "\n".join(self.conf["script"]) + "\n" + \
+				  delim,
+				  'pid=$!',
+				  'trap "kill $pid; exit" SIGCONT SIGTERM',
+				  'wait $pid'
 				]
+
+				# terminating Docker needs scancel to send a SIGTERM to the whole
+				# process group; thus, we must override the backend's scancel()
+				self.backend.scancel = types.MethodType(
+				  lambda self, jobID, *args, **kwargs : self.__class__.scancel(self, jobID, "f", *args, signal = "TERM", **kwargs),
+				  self.backend
+				)
 			except:
 				exception("configuring Docker")
 				raise
