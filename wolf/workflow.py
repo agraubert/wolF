@@ -112,5 +112,5 @@ class Workflow:
 
 			# TODO: save results
 		finally:
-			print("Tearing down cluster ...")
+			print("Tearing down cluster, please wait ...")
 			self.backend.__exit__()

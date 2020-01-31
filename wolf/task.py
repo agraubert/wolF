@@ -10,6 +10,8 @@ import types
 import typing
 import uuid
 
+from numpy import ravel
+
 class Task:
 	pass
 
@@ -182,7 +184,7 @@ class Task:
 			if callable(v):
 				if v.__name__ == "output_getter":
 					if not isinstance(v(), KeyError):
-						self.conf["inputs"][k] = v().tolist()
+						self.conf["inputs"][k] = list(ravel(v().tolist()))
 					else:
 						# FIXME: get the name of the upstream task here
 						raise KeyError("Could not resolve input \"{}\": output \"{}\" was not returned by upstream task!".format(k, v().args[0]))
@@ -277,6 +279,7 @@ class Task:
 				    rm = "--rm" if self.docker["rm"] else ""
 				  ) + \
 				  '"' + delim + '" &\n' + "cd $K9_CWD\n" + "\n".join(self.conf["script"]) + "\n" + \
+				  #"chown -R $(id -u {0}):$(id -g {0}) *\n".format(self.backend.config["user"]) + \
 				  delim,
 				  'pid=$!',
 				  'trap "kill $pid; exit" SIGCONT SIGTERM',
