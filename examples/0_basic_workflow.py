@@ -8,21 +8,28 @@ from wolf import Task, Workflow, output_helpers
 # ## Toy Workflow 1: a single task
 #
 # Our first workflow will comprise a single task, which takes arrays of numbers and letters, concatenates them with a user-specifiable string, and writes them to a file.
+#
+# ### 1.1. Define the workflow
 
 # Workflows are defined as classes, which are derived from wolF's Workflow class.
 class Example(Workflow):
     
     # The actual workflow is defined by the workflow() function inside this class.
-    # All parameters passed to the task (here, parameter_1) are specified in the function definition.
+    # All parameters passed to the task (here, parameter_1) are specified in the
+    # function definition.
     def workflow(self, parameter_1):
         
         # Tasks are defined as instances of wolF's task class.
         self.task_A = Task(
             
-          # Each task must have a unique name, which is used to identify the task in the output dataframe
+          # Each task must have a unique name, which is used to identify the task
+          # in the output dataframe
           name = "print_the_string",
 
-          # Input parameters are specified as a dict of arrays or scalars. One job will be dispatched for each array element; scalars will be common to all jobs.
+          # Input parameters are specified as a dict of arrays or scalars. One
+          # job will be dispatched for each array element; scalars will be
+          # common to all jobs.
+          # 
           # The following inputs will launch six jobs, with the following parameters:
           #   1. (number = 0, letter = "a", p1 = parameter_1)
           #   2. (number = 1, letter = "b", p1 = parameter_1)
@@ -42,15 +49,20 @@ class Example(Workflow):
             "echo -n ${p1} > output.abc"
           ],
             
-          # Output entities are inferred from the filenames of files written by the script.
-          # They can be specified either as strings or wildcards
+          # Output entities are inferred from the filenames of files written
+          # by the script. They can be specified either as strings or wildcards.
           outputs = {
-            "number+p1+letter" : "output.txt", # number+p1+letter will only point to a file called "output.txt"
-            "p1_only" : "*.abc"                # p1_only will point to any file ending in .abc
+            # number+p1+letter will only point to a file called "output.txt"
+            "number+p1+letter" : "output.txt",
+              
+            # p1_only will point to any file ending in .abc
+            "p1_only" : "*.abc"
           }
         )
 
 
+# ### 1.2. Run the workflow
+#
 # Now that we have defined our workflow, it's time to run it. Workflows are run in a context manager, which will automatically handle spinning up the cluster backend before the workflow starts and tearing it down after the workflow finishes.
 
 with Example(conf = { "compute_script" : "/usr/local/share/cga_pipeline/src/provision_worker_container_host.sh" }) as e:
@@ -59,6 +71,8 @@ with Example(conf = { "compute_script" : "/usr/local/share/cga_pipeline/src/prov
     e.run(parameter_1 = "baz", run_name = "baz_flow")
 
 # By repeatedly invoking the `run()` method of our `Example` workflow class, we dispatch multiple workflows to the same cluster, each with its own value for `parameter_1` as defined in `workflow()` above.
+
+# ### 1.3. Look at the workflow outputs
 #
 # `run_name` is a special parameter that uniquely identifies each workflow in the output dataframe. Once our workflow has finished, we can examine its results dataframe:
 
