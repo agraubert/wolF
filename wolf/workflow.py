@@ -10,6 +10,8 @@ class Workflow:
 	def __init__(self, backend = None, conf = {}):
 		# add backend
 		if backend is None:
+			# TODO: this should be a package-wide get_default_backend() method.
+			#       that way, tasks can use this too.
 			self.backend = canine.backends.dockerTransient.DockerTransientImageSlurmBackend(**{**{
 			  "compute_script_file" : None,
 			  "image" : None,

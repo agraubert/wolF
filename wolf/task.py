@@ -252,46 +252,49 @@ class Task:
 		if self.docker is not None:
 			try:
 				#
-				# do Docker stuff (if necessary)
+				# configure task to run in Docker (if necessary) 
 
-				# set Docker defaults
-				for k, v in {
-				  "tag" : "latest",
-				  "shell" : "/bin/bash",
-				  "rm" : True
-				}.items():
-					if k not in self.docker:
-						self.docker[k] = v
+				# check if task hasn't already been configured for Docker
+				if self.conf["script"][0] != "#WOLF_DOCKERIZED_TASK":
+					# set Docker defaults
+					for k, v in {
+					  "tag" : "latest",
+					  "shell" : "/bin/bash",
+					  "rm" : True
+					}.items():
+						if k not in self.docker:
+							self.docker[k] = v
 
-				# wrap script in Docker invocation
-				delim = uuid.uuid4().hex[0:8]
-				self.conf["script"] = [
-				  'docker run -v /mnt/nfs:/mnt/nfs {rm} --network host -i \
-				  --name "{name}" --user $(id -u {user}):$(id -g {user}) \
-				  --init -e "TINI_KILL_PROCESS_GROUP=1" \
-				  -e "K9_CWD=`pwd`" --env-file <(env | cut -f 1 -d =) {image} {shell} - <<'.format(
-					name = (self.conf["workflow"] + "_" if self.conf["workflow"] != "" else "") + \
-				      self.conf["name"] + "_$SLURM_ARRAY_TASK_ID",
-					user = self.backend.config["user"] if "user" not in self.docker \
-					  else self.docker["user"],
-					image = self.docker["image"] + ":" + self.docker["tag"],
-				    shell = self.docker["shell"],
-				    rm = "--rm" if self.docker["rm"] else ""
-				  ) + \
-				  '"' + delim + '" &\n' + "cd $K9_CWD\n" + "\n".join(self.conf["script"]) + "\n" + \
-				  #"chown -R $(id -u {0}):$(id -g {0}) *\n".format(self.backend.config["user"]) + \
-				  delim,
-				  'pid=$!',
-				  'trap "kill $pid; exit" SIGCONT SIGTERM',
-				  'wait $pid'
-				]
+					# wrap script in Docker invocation
+					delim = uuid.uuid4().hex[0:8]
+					self.conf["script"] = [
+					  '#WOLF_DOCKERIZED_TASK',
+					  'docker run -v /mnt/nfs:/mnt/nfs {rm} --network host -i \
+					  --name "{name}" --user $(id -u {user}):$(id -g {user}) \
+					  --init -e "TINI_KILL_PROCESS_GROUP=1" \
+					  -e "K9_CWD=`pwd`" --env-file <(env | cut -f 1 -d =) {image} {shell} - <<'.format(
+						name = (self.conf["workflow"] + "_" if self.conf["workflow"] != "" else "") + \
+						  self.conf["name"] + "_$SLURM_ARRAY_TASK_ID",
+						user = self.backend.config["user"] if "user" not in self.docker \
+						  else self.docker["user"],
+						image = self.docker["image"] + ":" + self.docker["tag"],
+						shell = self.docker["shell"],
+						rm = "--rm" if self.docker["rm"] else ""
+					  ) + \
+					  '"' + delim + '" &\n' + "cd $K9_CWD\n" + "\n".join(self.conf["script"]) + "\n" + \
+					  #"chown -R $(id -u {0}):$(id -g {0}) *\n".format(self.backend.config["user"]) + \
+					  delim,
+					  'pid=$!',
+					  'trap "kill $pid; exit" SIGCONT SIGTERM',
+					  'wait $pid'
+					]
 
-				# terminating Docker needs scancel to send a SIGTERM to the whole
-				# process group; thus, we must override the backend's scancel()
-				self.backend.scancel = types.MethodType(
-				  lambda self, jobID, *args, **kwargs : self.__class__.scancel(self, jobID, "f", *args, signal = "TERM", **kwargs),
-				  self.backend
-				)
+					# terminating Docker needs scancel to send a SIGTERM to the whole
+					# process group; thus, we must override the backend's scancel()
+					self.backend.scancel = types.MethodType(
+					  lambda self, jobID, *args, **kwargs : self.__class__.scancel(self, jobID, "f", *args, signal = "TERM", **kwargs),
+					  self.backend
+					)
 			except:
 				exception("configuring Docker")
 				raise
