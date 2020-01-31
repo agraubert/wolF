@@ -370,7 +370,7 @@ class Task:
 		# FIXME: we need to be able to report status on partially avoided jobs
 		#        of course, it still makes sense to not report anything on
 		#        completely avoided jobs.
-		if self.batch_id != -2 and self.n_avoided == 0:
+		if self.batch_id >= 0 and self.n_avoided == 0:
 			sacct_df = self.backend.sacct(job = self.batch_id, format = "JobId,JobName,State,ExitCode,CPUTimeRaw,NodeList%30")
 			sacct_df = sacct_df.loc[sacct_df["JobName"] != "batch"].drop(columns = "JobName")
 			sacct_df = pd.concat([
@@ -388,5 +388,9 @@ class Task:
 			sacct_df = sacct_df.merge(input_df, left_on = [("job", "ArrayID")], right_index = True)
 
 			return sacct_df
+		elif self.batch_id == -1:
+			# TODO: can we get status on the job if it partially ran?
+			#       we would need to store the batch_id before it gets set to -1
+			print("Job completely failed.")
 		else:
 			print("Job was avoided; no status to report.")
