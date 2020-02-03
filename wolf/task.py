@@ -10,8 +10,6 @@ import types
 import typing
 import uuid
 
-from numpy import ravel
-
 class Task:
 	pass
 
@@ -184,7 +182,7 @@ class Task:
 			if callable(v):
 				if v.__name__ == "output_getter":
 					if not isinstance(v(), KeyError):
-						self.conf["inputs"][k] = list(ravel(v().tolist()))
+						self.conf["inputs"][k] = v()
 					else:
 						# FIXME: get the name of the upstream task here
 						raise KeyError("Could not resolve input \"{}\": output \"{}\" was not returned by upstream task!".format(k, v().args[0]))
@@ -305,6 +303,10 @@ class Task:
 			self.orch = canine.Orchestrator(self.conf)
 			self.orch.backend = self.backend
 			self.localizer = canine.localization.nfs.NFSLocalizer(self.orch.backend, **self.conf["localization"])
+
+			# for display purposes only --- users might expect the inputs they
+			# gave to the constructor to appear as Task.inputs
+			self.inputs = self.orch.raw_inputs
 
 			# localize files
 			self.n_avoided = self.orch.job_avoid(self.localizer)
