@@ -285,14 +285,14 @@ class Task:
 					  #"chown -R $(id -u {0}):$(id -g {0}) *\n".format(self.backend.config["user"]) + \
 					  delim,
 					  'pid=$!',
-					  'trap "docker kill ' + container_name + '; exit" SIGCONT SIGTERM',
+					  'trap "docker stop ' + container_name + '; exit 1" SIGCONT',
 					  'wait $pid'
 					]
 
 					# terminating Docker needs scancel to send a SIGTERM to the whole
 					# process group; thus, we must override the backend's scancel()
 					self.backend.scancel = types.MethodType(
-					  lambda self, jobID, *args, **kwargs : self.__class__.scancel(self, jobID, "f", *args, signal = "TERM", **kwargs),
+					  lambda self, jobID, *args, **kwargs : self.__class__.scancel(self, jobID, "f", *args, signal = "CONT", **kwargs),
 					  self.backend
 					)
 			except:
