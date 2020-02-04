@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # # Toy Workflows
 # This notebook showcases the basic functionality of wolF: defining tasks, stringing them together in workflows, and launching container images.
 #
@@ -112,15 +113,18 @@ e.results.loc[(slice(None), slice(None), "5"), "inputs"]
 # It is very easy to interactively analyze the inputs and outputs of wolF workflows!
 
 # ## Example 2: multiple dependent tasks
+# Our second workflow will comprise four tasks. The first task `self.task_A` — `print_the_string` — is the same as in [Example 1](#Example-1:-a-single-task). Subsequent tasks `self.task_B` — `get_the_number` — and `self.task_C` — `get_the_letter` — depend on `self.task_A`, since their inputs are `self.task_A`'s outputs; these dependencies are specified with the `dependencies = self.task_A` parameter in the task definition.
 #
-# Our second workflow will comprise four tasks. The first task is the same as in [Example 1](#Example-1:-a-single-task).
+# To reference another task's outputs, we use the syntax `<task>.get_output(<output name>)`. Note that dependencies are not implicitly resolved from outputs alone — in addition to referencing `self.task_A`'s output via `self.task_A.get_output("number+p1+letter")`, we must also explicitly specify `dependencies = self.task_A`. This is by design, to make the structure of workflows clearer. It also makes it possible to define dependent tasks that do not depend on their parent tasks' outputs.
 
 class Example2(Workflow):
     def workflow(self, parameter_1, run_task_C = True):
+        
+        # This is identical to task_A as defined in Example 1.
         self.task_A = Task(
           name = "print_the_string",
           inputs = {
-            "number" : [0,   1,   2,   3,   4,   5],
+            "number" : [0,   1,   2,   3,   4,    5],
             "letter" : ["a", "b", "c", "d", "ef", "ghi"],
             "p1" : parameter_1 
           },
@@ -134,20 +138,36 @@ class Example2(Workflow):
           }
         )
 
+        # This task's input depends on task_A's output.
         self.task_B = Task(
           name = "get_the_number",
+            
+          # We reference task_A's output like so:
           inputs = {
             "input_file" : self.task_A.get_output("number+p1+letter")
           },
+            
+          # Outputs don't have to strictly be file paths; we can apply an arbitrary function to the path name.
+          # Here, we read in the contents of *.txt and store it as the output entity "number"
           outputs = {
             "number" : ("*.txt", output_helpers.read_file)
           },
+            
+          # This picks out the number at the start of task_A's "number+p1+letter" output, and writes it to disk
           script = [
             "grep -oE '^[0-9]+' ${input_file} > output.txt"
           ],
+            
+          # wolF requires that dependencies on upstream tasks be explicitly specified like so:
           dependencies = self.task_A
+          # Multiple dependencies are specified as an array.
+          #
+          # Note that wolF will not implicitly resolve dependencies from inputs. This is by design, to clarify workflow structures.
+          # This also makes it possible to define dependent tasks that do not depend on their parent tasks' outputs.
         )
-
+        
+        # task_C is optional; the input boolean run_task_C controls whether it is run.
+        # If an optional task is not run, it must be defined as None
         if run_task_C:
             self.task_C = Task(
               name = "get_the_letter",
@@ -157,18 +177,25 @@ class Example2(Workflow):
               outputs = {
                 "letter" : ("*.txt", output_helpers.read_file)
               },
+                
+              # This picks out the letter at the end of task_A's "number+p1+letter" output, and writes it to disk.
               script = [
                 "grep -oE '[a-z]+$' ${input_file} > output.txt"
               ],
               dependencies = self.task_A
             )
         else:
+            # If this task is not run, it must be defined as None.
             self.task_C = None
 
+        # This task concatenates the outputs from task_B and task_C.
         self.task_D = Task(
           name = "concat_results",
           inputs = {
             "input_number" : self.task_B.get_output("number"),
+              
+            # Because task_C is optional, we must include logic here to specify a default value if task_C did not
+            # run.
             "input_letter" : self.task_C.get_output("letter") if run_task_C else "z",
           },
           outputs = {
@@ -177,12 +204,18 @@ class Example2(Workflow):
           script = [
             "echo -n ${input_number},${input_letter} > ${input_number}.txt"
           ],
+            
+          # Since this task has two dependencies, we specify them as an array.
           dependencies = [self.task_B, self.task_C]
         )
 
-with Example2() as e:
+with Example2(conf = { "compute_script" : "/usr/local/share/cga_pipeline/src/provision_worker_container_host.sh" }) as e:
     e.run(parameter_1 = "foo", run_name = "foo_flow")
     e.run(parameter_1 = "bar", run_task_C = False, run_name = "bar_flow")
     e.run(parameter_1 = "baz", run_task_C = True, run_name = "baz_flow")
 
 e.results
+
+e.results.loc[(slice(None),"get_the_letter"), :].dropna(axis = 1)
+
+
