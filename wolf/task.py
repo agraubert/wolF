@@ -265,14 +265,15 @@ class Task:
 
 					# wrap script in Docker invocation
 					delim = uuid.uuid4().hex[0:8]
+					container_name = (self.conf["workflow"] + "_" if self.conf["workflow"] != "" else "") + \
+					  self.conf["name"] + "_$SLURM_ARRAY_TASK_ID"
 					self.conf["script"] = [
 					  '#WOLF_DOCKERIZED_TASK',
 					  'docker run -v /mnt/nfs:/mnt/nfs {rm} --network host -i \
 					  --name "{name}" --user $(id -u {user}):$(id -g {user}) \
 					  --init -e "TINI_KILL_PROCESS_GROUP=1" \
 					  -e "K9_CWD=`pwd`" --env-file <(env | cut -f 1 -d =) {image} {shell} - <<'.format(
-						name = (self.conf["workflow"] + "_" if self.conf["workflow"] != "" else "") + \
-						  self.conf["name"] + "_$SLURM_ARRAY_TASK_ID",
+						name = container_name,
 						user = self.backend.config["user"] if "user" not in self.docker \
 						  else self.docker["user"],
 						image = self.docker["image"] + ":" + self.docker["tag"],
@@ -283,7 +284,7 @@ class Task:
 					  #"chown -R $(id -u {0}):$(id -g {0}) *\n".format(self.backend.config["user"]) + \
 					  delim,
 					  'pid=$!',
-					  'trap "kill $pid; exit" SIGCONT SIGTERM',
+					  'trap "docker kill ' + container_name + '; exit" SIGCONT SIGTERM',
 					  'wait $pid'
 					]
 
