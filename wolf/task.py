@@ -208,9 +208,10 @@ class Task:
 		self.thread.start()
 
 	def _run(self):
-		def exception(gerund):
+		def exception(gerund, exception = None):
 			print("Error {} job {}:".format(gerund, self.conf["name"]))
-			traceback.print_exc()
+			if isinstance(exception, Exception):
+				print(exception)
 
 			self.batch_id = -1
 			if not self.lock.is_set():
@@ -243,9 +244,9 @@ class Task:
 					  **self.extra_slurm_args,
 					  **{"dependency" : proc_deps }
 					}
-		except:
-			exception("resolving dependencies for")
-			raise
+		except Exception as e:
+			exception("resolving dependencies for", e)
+			return
 
 		if self.docker is not None:
 			try:
