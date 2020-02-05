@@ -159,6 +159,9 @@ class Task:
 
 	def get_output(self, fields, func = lambda x : x):
 		def output_getter():
+			if self.batch_id is None or self.batch_id == -1:
+				return RuntimeError("This task has not produced any output.")
+
 			try:
 				return func(self.results["outputs"].loc[:, fields])
 			except KeyError:
@@ -181,11 +184,13 @@ class Task:
 		for k, v in self.conf["inputs"].items():
 			if callable(v):
 				if v.__name__ == "output_getter":
-					if not isinstance(v(), KeyError):
+					if not isinstance(v(), Exception):
 						self.conf["inputs"][k] = v()
-					else:
+					elif isinstance(v(), KeyError):
 						# FIXME: get the name of the upstream task here
 						raise KeyError("Could not resolve input \"{}\": output \"{}\" was not returned by upstream task!".format(k, v().args[0]))
+					elif isinstance(v(), RuntimeError):
+						raise RuntimeError("Upstream task \"{}\" never ran!".format(k))
 				else:
 					self.conf["inputs"][k] = v()
 
@@ -216,6 +221,10 @@ class Task:
 			self.batch_id = -1
 			if not self.lock.is_set():
 				self.lock.set()
+
+		# before doing anything, make sure this task hasn't been cancelled
+		if self.lock.is_set():
+			return
 
 		try:
 			#
@@ -317,6 +326,11 @@ class Task:
 			exception("localizing files for")
 			raise
 
+		# it's possible the task was cancelled during localization; we thus
+		# must check once more whether it was cancelled.
+		if self.lock.is_set():
+			return
+
 		completed_jobs = cpu_time = uptime = prev_acct = None
 		try:
 			# submit batch job
@@ -365,10 +379,11 @@ class Task:
 				self.lock.set()
 
 	def cancel(self):
-		while self.batch_id is None:
-			pass
+		if self.batch_id is not None and int(self.batch_id) >= 0:
+			self.backend.scancel(self.batch_id)
 
-		self.backend.scancel(self.batch_id)
+		if not self.lock.is_set():
+			self.lock.set()
 
 	def status(self):
 		# FIXME: we need to be able to report status on partially avoided jobs

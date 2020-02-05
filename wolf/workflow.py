@@ -86,7 +86,6 @@ class Workflow:
 		return self
 
 	def __exit__(self, *args):
-		print("Exiting workflow ...")
 		try:
 			#
 			# loop over all workflows dispatched
@@ -96,6 +95,9 @@ class Workflow:
 				# wait for all tasks within this workflow to finish
 				for task in workflow.values():
 					task.lock.wait()
+
+				# TODO: move this to finally block, so we can always have
+				#       at least some results
 
 				#
 				# aggregate tasks' results
@@ -113,6 +115,16 @@ class Workflow:
 			self.results = pd.concat(w, keys = self.flow_list.keys(), names = ["workflow_run_name"]) if len(w) > 0 else None
 
 			# TODO: save results
+		except KeyboardInterrupt:
+			# TODO: can we register SIGTERM to raise a keyboard interrupt so this
+			#       exception can behave identically?
+			print("\nWorkflow cancelled by user!")
+
+			#
+			# cancel all tasks
+			for workflow in self.flow_list.values():
+				for task in workflow.values():
+					task.cancel()
 		finally:
 			print("Tearing down cluster, please wait ...")
 			self.backend.__exit__()
