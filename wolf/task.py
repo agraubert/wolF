@@ -4,6 +4,7 @@ import copy
 import os
 import pandas as pd
 import re
+import sys
 import threading
 import traceback
 import types
@@ -380,7 +381,11 @@ class Task:
 
 	def cancel(self):
 		if self.batch_id is not None and int(self.batch_id) >= 0:
-			self.backend.scancel(self.batch_id)
+			try:
+				self.backend.scancel(self.batch_id)
+			except Exception as e:
+				print("Slurm could not cancel job:", file = sys.stderr)
+				print(e, file = sys.stderr)
 
 		if not self.lock.is_set():
 			self.lock.set()
