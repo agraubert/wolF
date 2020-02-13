@@ -5,6 +5,7 @@ import canine
 import abc
 import os
 import pandas as pd
+import threading
 
 class Workflow:
 	def __init__(self, backend = None, conf = {}):
@@ -119,12 +120,18 @@ class Workflow:
 			# TODO: can we register SIGTERM to raise a keyboard interrupt so this
 			#       exception can behave identically?
 			print("\nWorkflow cancelled by user!")
+			print("Stopping all jobs, please wait ...")
 
 			#
-			# cancel all tasks
+			# asynchronously cancel all tasks
+			cancel_threads = []
 			for workflow in self.flow_list.values():
 				for task in workflow.values():
-					task.cancel()
+					th = threading.Thread(target = task.cancel)
+					th.start()
+					cancel_threads.append(th)
+			for th in cancel_threads:
+				th.join(timeout = 60)
 		finally:
 			print("Tearing down cluster, please wait ...")
 			self.backend.__exit__()
