@@ -9,7 +9,8 @@ from wolf import Task, Workflow, output_helpers
 # Since wolF outputs workflow results to Pandas dataframes, we need to import Pandas as well to manipulate them.
 
 import pandas as pd
-pd.set_option('display.max_colwidth', -1)
+pd.set_option('display.max_colwidth', None)
+pd.set_option('display.max_rows', None)
 
 
 # ## Example 1: a single task
@@ -210,17 +211,17 @@ class Example2(Workflow):
         )
 
 with Example2() as e:
-    e.run(parameter_1 = "foo", run_name = "foo_flow")
-    e.run(parameter_1 = "bar", run_task_C = False, run_name = "bar_flow")
-    e.run(parameter_1 = "baz", run_task_C = True, run_name = "baz_flow")
+    e.run(parameter_1 = "foo", run_name = "foo_flow_2")
+    e.run(parameter_1 = "bar", run_task_C = False, run_name = "bar_flow_2")
+    e.run(parameter_1 = "baz", run_task_C = True, run_name = "baz_flow_2")
 
 # View the results:
 
 e.results
 
-# We see the tasks executed within each of the three workflows. Note that task `get_the_letter` was not executed for run `bar_flow`.
+# We see the tasks executed within each of the three workflows. 
 #
-# Across all runs, look at just the outputs of task `get_the_letter`:
+# Note that task `get_the_letter` was not executed for run `bar_flow`, as expected:
 
 e.results.loc[(slice(None), "get_the_letter"), :].dropna(axis = 1)
 
