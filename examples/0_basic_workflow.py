@@ -76,7 +76,7 @@ class Example1(Workflow):
 #
 # Now that we have defined our workflow, it's time to run it. Workflows are run in a context manager, which will automatically handle spinning up the cluster backend before the workflow starts and tearing it down after the workflow finishes.
 
-with Example1(conf = { "compute_script" : "/usr/local/share/cga_pipeline/src/provision_worker_container_host.sh" }) as e:
+with Example1() as e:
     e.run(parameter_1 = "foo", run_name = "foo_flow")
     e.run(parameter_1 = "bar", run_name = "bar_flow")
     e.run(parameter_1 = "baz", run_name = "baz_flow")
@@ -209,13 +209,20 @@ class Example2(Workflow):
           dependencies = [self.task_B, self.task_C]
         )
 
-with Example2(conf = { "compute_script" : "/usr/local/share/cga_pipeline/src/provision_worker_container_host.sh" }) as e:
+with Example2() as e:
     e.run(parameter_1 = "foo", run_name = "foo_flow")
     e.run(parameter_1 = "bar", run_task_C = False, run_name = "bar_flow")
     e.run(parameter_1 = "baz", run_task_C = True, run_name = "baz_flow")
 
+# View the results:
+
 e.results
 
-e.results.loc[(slice(None),"get_the_letter"), :].dropna(axis = 1)
+# We see the tasks executed within each of the three workflows. Note that task `get_the_letter` was not executed for run `bar_flow`.
+#
+# Across all runs, look at just the outputs of task `get_the_letter`:
 
+e.results.loc[(slice(None), "get_the_letter"), :].dropna(axis = 1)
 
+# ## Example 3: container images
+# TODO
