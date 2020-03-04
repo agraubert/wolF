@@ -10,6 +10,7 @@ import traceback
 import types
 import typing
 import uuid
+from contextlib import ExitStack
 
 class Task:
 	pass
@@ -63,7 +64,7 @@ class Task:
 				self.conf = copy.deepcopy(conf)
 			else:
 				self.conf = {
-				  "localization" : { "strategy" : "NFS" },
+				  "localization" : {},
 				  "script" : []
 				}
 
@@ -98,7 +99,7 @@ class Task:
 			else:
 				self.conf["script"] = script
 
-			self.backend = backend if backend is not None else None
+			self.backend = backend if backend is not None else None # AG: ??????
 
 			#
 			# staging dir
@@ -130,7 +131,7 @@ class Task:
 					raise TypeError("Docker must be specified as a dict or string!")
 
 			#
-			# create placeholders: 
+			# create placeholders:
 
 			# workflow ID (added by wolf.Workflow, post-hoc)
 			self.conf["workflow"] = ""
@@ -167,6 +168,10 @@ class Task:
 				return func(self.results["outputs"].loc[:, fields])
 			except KeyError:
 				return KeyError(fields)
+
+		output_getter.taskname = re.sub("/", "-", self.conf["name"])
+		output_getter.fields = fields
+		output_getter.task = self
 
 		return output_getter
 
@@ -230,7 +235,7 @@ class Task:
 		try:
 			#
 			# check if backend is valid
-			# TODO: should we check if it's been entered? 
+			# TODO: should we check if it's been entered?
 			if self.backend is None:
 				raise Exception("Backend has not yet been initialized!")
 
@@ -261,7 +266,7 @@ class Task:
 		if self.docker is not None:
 			try:
 				#
-				# configure task to run in Docker (if necessary) 
+				# configure task to run in Docker (if necessary)
 
 				# check if task hasn't already been configured for Docker
 				if self.conf["script"][0] != "#WOLF_DOCKERIZED_TASK":
@@ -309,75 +314,83 @@ class Task:
 				exception("configuring Docker")
 				raise
 
-		try:
-			#
-			# initialize orchestrator and localizer
-			self.orch = canine.Orchestrator(self.conf)
-			self.orch.backend = self.backend
-			self.localizer = canine.localization.nfs.NFSLocalizer(self.orch.backend, **self.conf["localization"])
+		with ExitStack() as stack:
+			try:
+				#
+				# initialize orchestrator and localizer
+				self.orch = canine.Orchestrator(self.conf)
+				self.orch.backend = self.backend
+				print("TASK", self.conf['name'], "Creating localizer")
+				self.localizer = canine.orchestrator.LOCALIZERS[self.conf['localization'].get('strategy', 'NFS')](self.orch.backend, **self.conf['localization'])
+				stack.enter_context(self.localizer)
 
-			# for display purposes only --- users might expect the inputs they
-			# gave to the constructor to appear as Task.inputs
-			self.inputs = self.orch.raw_inputs
+				# for display purposes only --- users might expect the inputs they
+				# gave to the constructor to appear as Task.inputs
+				self.inputs = self.orch.raw_inputs
 
-			# localize files
-			self.n_avoided = self.orch.job_avoid(self.localizer)
-			entrypoint_path = self.orch.localize_inputs_and_script(self.localizer)
-		except:
-			exception("localizing files for")
-			raise
+				# localize files
+				self.n_avoided = self.orch.job_avoid(self.localizer)
+				entrypoint_path = self.orch.localize_inputs_and_script(self.localizer)
+			except:
+				exception("localizing files for")
+				raise
 
-		# it's possible the task was cancelled during localization; we thus
-		# must check once more whether it was cancelled.
-		if self.lock.is_set():
-			return
+			# it's possible the task was cancelled during localization; we thus
+			# must check once more whether it was cancelled.
+			if self.lock.is_set():
+				return
 
-		completed_jobs = cpu_time = uptime = prev_acct = None
-		try:
-			# submit batch job
-			self.batch_id = self.orch.submit_batch_job(entrypoint_path, self.localizer.environment('compute'), self.extra_slurm_args)
+			completed_jobs = cpu_time = uptime = prev_acct = None
+			try:
+				# submit batch job
+				self.batch_id = self.orch.submit_batch_job(entrypoint_path, self.localizer.environment('compute'), self.extra_slurm_args)
+				print("Task", self.conf["name"], "queued with batch id", self.batch_id)
 
-			# wait for jobs to finish
-			completed_jobs, cpu_time, uptime, prev_acct = self.orch.wait_for_jobs_to_finish(self.batch_id)
+				# wait for jobs to finish
+				completed_jobs, cpu_time, uptime, prev_acct = self.orch.wait_for_jobs_to_finish(self.batch_id)
 
-			# FIXME: currently, job accounting does not work with partially avoided
-			#        jobs. this is because Task.status() assumes Task.orch.job_spec
-			#        is in sync with the array IDs
+				# FIXME: currently, job accounting does not work with partially avoided
+				#        jobs. this is because Task.status() assumes Task.orch.job_spec
+				#        is in sync with the array IDs
 
-			if self.n_avoided == 0:
-				# job comprised a single task
-				if len(self.orch.job_spec) == 1:
-					print("Task \"{}\" finished with status {}".format(
-					  self.conf["name"], self.status()[("job", "State")].iloc[0]
-					))
-				# job comprised multiple tasks
-				elif len(self.orch.job_spec) >= 1:
-					print("Task \"{}\" finished with statuses {}".format(
+				if self.n_avoided == 0:
+					# job comprised a single task
+					if len(self.orch.job_spec) == 1:
+						print("Task \"{}\" finished with status {}".format(
+						  self.conf["name"], self.status()[("job", "State")].iloc[0]
+						))
+					# job comprised multiple tasks
+					elif len(self.orch.job_spec) >= 1:
+						print("Task \"{}\" finished with statuses {}".format(
+						  self.conf["name"],
+						  ", ".join([str(k) + ": " + str(v)
+							for k, v in self.status()[("job", "State")].value_counts().iteritems()
+						  ])
+						))
+				else:
+					# TODO: also print the total number of jobs in this task
+					print("Task \"{}\" was job avoided ({:d} jobs avoided).".format(
 					  self.conf["name"],
-					  ", ".join([str(k) + ": " + str(v)
-						for k, v in self.status()[("job", "State")].value_counts().iteritems()
-					  ])
+					  self.n_avoided
 					))
-			else:
-				# TODO: also print the total number of jobs in this task
-				print("Task \"{}\" was job avoided ({:d} jobs avoided).".format(
-				  self.conf["name"],
-				  self.n_avoided
-				))
-				
-		except:
-			exception("running")
-			raise
-		finally:
-			# delocalize files
-			outputs = self.localizer.delocalize(self.orch.raw_outputs)
 
-			# make output dataframe
-			self.results = self.orch.make_output_DF(self.batch_id, outputs, cpu_time, prev_acct, self.localizer)
+			except:
+				exception("running")
+				raise
+			finally:
+				# Convert output manifest to output dict matching delocalize() format
+				outputs = self.localizer.build_manifest().groupby('jobId').agg(
+					lambda x: x.groupby('field').agg(
+						lambda y: [os.path.join(self.localizer.staging_dir, 'outputs', z) for z in y]
+					).to_dict()
+				).to_dict()['path']
 
-			# release lock
-			if not self.lock.is_set():
-				self.lock.set()
+				# make output dataframe
+				self.results = self.orch.make_output_DF(self.batch_id, outputs, cpu_time, prev_acct, self.localizer)
+
+				# release lock
+				if not self.lock.is_set():
+					self.lock.set()
 
 	def cancel(self):
 		if self.batch_id is not None and int(self.batch_id) >= 0:

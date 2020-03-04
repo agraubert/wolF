@@ -6,9 +6,12 @@ import abc
 import os
 import pandas as pd
 import threading
+import warnings
 
-class Workflow:
-	def __init__(self, backend = None, conf = {}):
+class Workflow(object):
+	def __init__(self, backend = None, strategy = None, conf = None):
+		if conf is None:
+			conf = {}
 		# add backend
 		if backend is None:
 			# TODO: this should be a package-wide get_default_backend() method.
@@ -24,8 +27,11 @@ class Workflow:
 		else:
 			self.backend = backend
 
+		self.strategy = strategy if strategy is not None else 'NFS'
+
 		# all workflows dispatched by this workflow definition
 		self.flow_list = {}
+		self.outputs = {}
 
 		# number of workflows that have been dispatched by this definition
 		self.run_index = 0
@@ -37,12 +43,17 @@ class Workflow:
 	def run(self, run_name = None, **kwargs):
 		#
 		# copy this workflow
-		flow = self.__class__(backend = self.backend)
+		# AG: Why?
+		flow = self.__class__(backend = self.backend, strategy=self.strategy)
 
 		#
 		# instantiate task objects in copy
 		try:
-			flow.workflow(**kwargs)
+			final_outputs = flow.workflow(**kwargs)
+			if final_outputs is None:
+				warnings.warn(
+					"Workflow delcared no outputs. Output files will not be delocalized"
+				)
 		except:
 			print("Workflow is invalid!")
 			raise
@@ -54,6 +65,7 @@ class Workflow:
 		#
 		# index task objects
 		self.flow_list[run_name] = flow._index_tasks()
+		self.outputs[run_name] = (flow, final_outputs)
 
 		#
 		# dispatch tasks, with outputs in run-specific directory
@@ -70,14 +82,66 @@ class Workflow:
 
 			t.run()
 
+	def delocalize(self, outputs, output_dir = 'wolf_output'):
+		"""
+		Delocalizes the output directory of any relevant tasks.
+		Returns a final pandas dataframe containing only the declared outputs.
+		"""
+
+		def listize(obj):
+			if isinstance(obj, list):
+				return obj
+			return [obj]
+
+		outputs_by_task = {
+			taskname: [(name, getter) for name, getter in outputs.items() if getter.taskname == taskname]
+			for taskname in {getter.taskname for getter in outputs.values()}
+		}
+		if not os.path.exists(output_dir):
+			os.makedirs(output_dir)
+		flow_outputs = pd.DataFrame(columns=['task', 'field_name', 'files'], index=pd.Index([], name='output'))
+		for taskname in outputs_by_task:
+			taskdir = os.path.join(output_dir, taskname)
+			if len(outputs_by_task[taskname]):
+				task_outputs = outputs_by_task[taskname][0][1].task.localizer.delocalize(
+					{
+						field: getter.task.conf['outputs'][field]
+						for name, getter in outputs_by_task[taskname] for field in listize(getter.fields)
+					},
+					taskdir
+				)
+				print(task_outputs)
+				flow_outputs = flow_outputs.append(
+					pd.DataFrame(data=[
+						{
+							'task': taskname,
+							'output': name,
+							'field_name': field,
+							'files': [
+								path for job_outputs in task_outputs.values() for path in job_outputs[field]
+							]
+						}
+						for name, getter in outputs_by_task[taskname] for field in listize(getter.fields)
+					]).set_index('output')[flow_outputs.columns]
+				)
+		return flow_outputs
+
 	def _index_tasks(self):
+		print("My strategy is", self.strategy)
 		task_index = {}
 		for member in self.__dict__.values():
 			if isinstance(member, Task):
 				# add backend to task if not present
 				if member.backend is None:
-					member.backend = self.backend
-				
+					member.backend = self.backend # Ah
+					print("INDEXING", member.conf['name'])
+					print(member.conf['localization'])
+					member.conf['localization'] = {
+						**{'strategy': self.strategy},
+						**member.conf['localization']
+					}
+					print(member.conf['localization'])
+
 				task_index[member.conf["name"]] = member
 
 		return task_index
@@ -91,7 +155,7 @@ class Workflow:
 			#
 			# loop over all workflows dispatched
 			w = []
-			for workflow in self.flow_list.values():
+			for name, workflow in self.flow_list.items():
 				#
 				# wait for all tasks within this workflow to finish
 				for task in workflow.values():
@@ -108,6 +172,10 @@ class Workflow:
 						r.append(task.results)
 					else: # this job was a total failure
 						r.append(pd.DataFrame(index = [float('nan')]))
+
+				# AG: Not sure what to do with this right now
+				# For now, let's rewrite self.outputs with actual outputs
+				self.outputs[name] = self.outputs[name][0].delocalize(self.outputs[name][1]) if self.outputs[name][1] is not None else None
 
 				w.append(pd.concat(r, keys = workflow.keys(), names = ["task", "shard"]))
 
