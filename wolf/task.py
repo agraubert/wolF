@@ -320,7 +320,6 @@ class Task:
 				# initialize orchestrator and localizer
 				self.orch = canine.Orchestrator(self.conf)
 				self.orch.backend = self.backend
-				print("TASK", self.conf['name'], "Creating localizer")
 				self.localizer = canine.orchestrator.LOCALIZERS[self.conf['localization'].get('strategy', 'NFS')](self.orch.backend, **self.conf['localization'])
 				stack.enter_context(self.localizer)
 

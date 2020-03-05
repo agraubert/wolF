@@ -99,7 +99,7 @@ class Workflow(object):
 		}
 		if not os.path.exists(output_dir):
 			os.makedirs(output_dir)
-		flow_outputs = pd.DataFrame(columns=['task', 'field_name', 'files'], index=pd.Index([], name='output'))
+		flow_outputs = pd.DataFrame(columns=['task', 'field_name', 'jobId', 'files'], index=pd.Index([], name='output'))
 		for taskname in outputs_by_task:
 			taskdir = os.path.join(output_dir, taskname)
 			if len(outputs_by_task[taskname]):
@@ -110,37 +110,33 @@ class Workflow(object):
 					},
 					taskdir
 				)
-				print(task_outputs)
 				flow_outputs = flow_outputs.append(
 					pd.DataFrame(data=[
 						{
 							'task': taskname,
 							'output': name,
 							'field_name': field,
+							'jobId': jobId,
 							'files': [
-								path for job_outputs in task_outputs.values() for path in job_outputs[field]
+								path for path in job_outputs[field]
 							]
 						}
-						for name, getter in outputs_by_task[taskname] for field in listize(getter.fields)
+						for name, getter in outputs_by_task[taskname] for field in listize(getter.fields) for jobId, job_outputs in task_outputs.items()
 					]).set_index('output')[flow_outputs.columns]
 				)
 		return flow_outputs
 
 	def _index_tasks(self):
-		print("My strategy is", self.strategy)
 		task_index = {}
 		for member in self.__dict__.values():
 			if isinstance(member, Task):
 				# add backend to task if not present
 				if member.backend is None:
 					member.backend = self.backend # Ah
-					print("INDEXING", member.conf['name'])
-					print(member.conf['localization'])
 					member.conf['localization'] = {
 						**{'strategy': self.strategy},
 						**member.conf['localization']
 					}
-					print(member.conf['localization'])
 
 				task_index[member.conf["name"]] = member
 
@@ -173,11 +169,31 @@ class Workflow(object):
 					else: # this job was a total failure
 						r.append(pd.DataFrame(index = [float('nan')]))
 
-				# AG: Not sure what to do with this right now
-				# For now, let's rewrite self.outputs with actual outputs
-				self.outputs[name] = self.outputs[name][0].delocalize(self.outputs[name][1]) if self.outputs[name][1] is not None else None
+				task_results_df = pd.concat(
+					r, keys = workflow.keys(), names = ["task", "shard"]
+				).rename({'outputs': 'task_outputs'}, axis='columns')
 
-				w.append(pd.concat(r, keys = workflow.keys(), names = ["task", "shard"]))
+				if self.outputs[name][1] is not None:
+					output_df = self.outputs[name][0].delocalize(
+						self.outputs[name][1],
+						'wolf_output/{}'.format(name)
+					).reset_index().rename(
+						{'jobId': 'shard'},
+						axis='columns'
+					).set_index(['task', 'shard', 'output'])['files'].apply(
+						lambda cell: cell[0] if isinstance(cell, list) and len(cell) == 1 else cell
+					).unstack(level=2)
+
+					output_df.columns = pd.MultiIndex(
+						levels=[['outputs'], output_df.columns.to_list()],
+						codes=[
+							[0]*len(output_df.columns),
+							[*range(len(output_df.columns))]
+						]
+					)
+					task_results_df = task_results_df.join(output_df)
+
+				w.append(task_results_df)
 
 			# XXX: we might need to put this in a try/catch block -- there are
 			#      many more ways that this can get screwed up besides zero output.
